@@ -1,0 +1,18 @@
+cd /d C:\Users\userx
+
+set "EXE=C:\LectorA\LectorA.exe"
+
+reg add "HKCU\Software\Classes\Directory\Background\shell\LectorA" /ve /d "Ejecutar LectorA" /f
+reg add "HKCU\Software\Classes\Directory\Background\shell\LectorA" /v Icon /d "%EXE%" /f
+reg add "HKCU\Software\Classes\Directory\Background\shell\LectorA\command" /ve /d "\"%EXE%\" \"%V\"" /f
+
+reg add "HKCU\Software\Classes\Directory\shell\LectorA" /ve /d "Ejecutar LectorA" /f
+reg add "HKCU\Software\Classes\Directory\shell\LectorA" /v Icon /d "%EXE%" /f
+reg add "HKCU\Software\Classes\Directory\shell\LectorA\command" /ve /d "\"%EXE%\" \"%1\"" /f
+
+
+
+
+
+
+(poner la carpeta en raiz o modificar el comando)
