@@ -180,6 +180,50 @@ def open_info(parent, title, text):
     win.bind("<Escape>", lambda e: win.destroy())
 
 
+# ------------------------------------------------------- panel con scroll
+class ScrollFrame(tk.Frame):
+    """Panel con su propio canvas. El scroll vertical (barra y rueda) solo
+    existe cuando el contenido es más alto que el área visible."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
+        self.canvas = tk.Canvas(self, highlightthickness=0)
+        self.sb = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.sb.set)
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        self.inner = tk.Frame(self.canvas)
+        self.inner.columnconfigure(0, weight=1)
+        self._win = self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
+        self.scrollable = False
+        self.inner.bind("<Configure>", lambda e: self._update())
+        self.canvas.bind("<Configure>", self._on_canvas)
+
+    def _on_canvas(self, e):
+        self.canvas.itemconfigure(self._win, width=e.width)
+        self._update()
+
+    def _update(self):
+        content_h = self.inner.winfo_reqheight()
+        view_h = self.canvas.winfo_height()
+        if content_h > view_h > 1:
+            self.canvas.configure(scrollregion=(0, 0, 1, content_h))
+            if not self.scrollable:
+                self.scrollable = True
+                self.sb.grid(row=0, column=1, sticky="ns")
+        else:
+            self.canvas.configure(scrollregion=(0, 0, 1, max(view_h, 1)))
+            self.canvas.yview_moveto(0)
+            if self.scrollable:
+                self.scrollable = False
+                self.sb.grid_remove()
+
+    def scroll(self, units):
+        if self.scrollable:
+            self.canvas.yview_scroll(units, "units")
+
+
 # ------------------------------------------------------------------------ app
 class LectorA(tk.Tk):
     def __init__(self, folder):
@@ -212,24 +256,25 @@ class LectorA(tk.Tk):
 
         left = tk.Frame(self, padx=10, pady=10)
         left.grid(row=0, column=0, sticky="nsew")
-        left.rowconfigure(0, weight=1)
+        left.rowconfigure(1, weight=1)
         left.columnconfigure(0, weight=1)
 
-        self.canvas = tk.Canvas(left, highlightthickness=0)
-        sb = ttk.Scrollbar(left, orient="vertical", command=self.canvas.yview)
-        self.canvas.configure(yscrollcommand=sb.set)
-        self.canvas.grid(row=0, column=0, sticky="nsew")
-        sb.grid(row=0, column=1, sticky="ns")
-        self.list_frame = tk.Frame(self.canvas)
-        self.list_frame.columnconfigure(0, weight=1)
-        win_id = self.canvas.create_window((0, 0), window=self.list_frame, anchor="nw")
-        self.list_frame.bind("<Configure>",
-                             lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
-        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(win_id, width=e.width))
+        self.reload_button = tk.Button(left, text="Recargar", font=FONT, padx=12,
+                                       command=self.refresh)
+        self.reload_button.grid(row=0, column=0, pady=(0, 10))  # centrado
 
-        right = tk.Frame(self, padx=10, pady=10)
-        right.grid(row=0, column=1, sticky="nsew")
-        right.columnconfigure(0, weight=1)
+        self.left_scroll = ScrollFrame(left)
+        self.left_scroll.grid(row=1, column=0, sticky="nsew")
+        self.list_frame = self.left_scroll.inner
+
+        right_box = tk.Frame(self, padx=10, pady=10)
+        right_box.grid(row=0, column=1, sticky="nsew")
+        right_box.rowconfigure(0, weight=1)
+        right_box.columnconfigure(0, weight=1)
+
+        self.right_scroll = ScrollFrame(right_box)
+        self.right_scroll.grid(row=0, column=0, sticky="nsew")
+        right = self.right_scroll.inner
 
         self.status = tk.Label(right, text="Escaneando...", font=FONT_BOLD,
                                anchor="w", justify="left", wraplength=420)
@@ -279,12 +324,23 @@ class LectorA(tk.Tk):
         self.bind("<F2>", lambda e: self.act_rename())
         self.bind("<Control-z>", lambda e: self.act_undo())
         self.bind("<Control-Z>", lambda e: self.act_undo())
-        self.bind("<MouseWheel>",
-                  lambda e: self.canvas.yview_scroll(int(-e.delta / 120), "units"))
+        self.bind("<MouseWheel>", self._on_wheel)
+
+    def _on_wheel(self, e):
+        try:
+            w = self.winfo_containing(e.x_root, e.y_root)
+        except (KeyError, tk.TclError):
+            return
+        while w is not None:
+            if isinstance(w, ScrollFrame):
+                w.scroll(int(-e.delta / 120))
+                return
+            w = w.master
 
     # ------------------------------------------------------------------ estado
     def _set_buttons(self):
         enabled = self.ready and not self.busy and bool(self.selected)
+        self.reload_button.configure(state="disabled" if self.busy else "normal")
 
         for b in self.action_buttons:
             if b.cget("text") == "Deshacer última acción":
@@ -504,7 +560,7 @@ class LectorA(tk.Tk):
                     open_info(
                         self,
                         "No se puede deshacer",
-                        f"No se encuentra el archivo:\\n{current}",
+                        f"No se encuentra el archivo:\n{current}",
                     )
                     return
 
@@ -512,7 +568,7 @@ class LectorA(tk.Tk):
                     open_info(
                         self,
                         "No se puede deshacer",
-                        f"El nombre original ya está ocupado:\\n{original}",
+                        f"El nombre original ya está ocupado:\n{original}",
                     )
                     return
 
