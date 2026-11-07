@@ -15,4 +15,4 @@ reg add "HKCU\Software\Classes\Directory\shell\LectorA\command" /ve /d "\"%EXE%\
 
 (poner la carpeta en raiz o modificar el comando)
 copilado(pwsh)
-pyinstaller --onedir --noconfirm --name LectorA LectorA.py
+pyinstaller --onedir --windowed -y --clean --name LectorA LectorA.py
